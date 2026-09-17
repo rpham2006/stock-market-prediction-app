@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}{{ company.symbol }} — {{ company.name }} — StockForecast{% endblock %}
+
+{% block content %}
+{% set change = company.change_percent %}
+{% set dir_class = 'up' if change is not none and change >= 0 else 'down' %}
+
+{% if notice %}
+<div class="banner {{ 'warn' if is_stale else 'info' }}">{{ notice }}</div>
+{% endif %}
+
+<!-- ── header ───────────────────────────────────────────── -->
+<section class="quote-head">
+  <div class="quote-id">
+    <h1>{{ company.symbol }}</h1>
+    <p class="company-name">{{ company.name }}</p>
+    <p class="exchange">{{ company.exchange or 'Unknown exchange' }} · {{ company.currency }}</p>
+  </div>
+
+  <div class="quote-price">
+    <div class="price">
+      {% if company.last_price is not none %}${{ '%.2f'|format(company.last_price) }}{% else %}—{% endif %}
+    </div>
+    {% if change is not none %}
+    <div class="delta {{ dir_class }}">
+      {{ '%+.2f'|format(company.change) }} ({{ '%+.2f'|format(change) }}%)
+      <span class="delta-label">today</span>
+    </div>
+    {% endif %}
+    <form action="/stock/{{ company.symbol }}/refresh" method="post" class="refresh-form">
+      <button type="submit" class="button ghost">Refresh data</button>
+    </form>
+  </div>
+</section>
+
+<!-- ── current metrics ───────────────────────────────────── -->
+<section class="metrics">
+  {% set highs = bars | map(attribute='high') | list %}
+  {% set lows = bars | map(attribute='low') | list %}
+  <div class="metric">
+    <span class="metric-label">Previous close</span>
+    <span class="metric-value">{% if company.previous_close %}${{ '%.2f'|format(company.previous_close) }}{% else %}—{% endif %}</span>
+  </div>
+  <div class="metric">
+    <span class="metric-label">Day range</span>
+    <span class="metric-value">
+      {% if company.day_low and company.day_high %}
+        ${{ '%.2f'|format(company.day_low) }} – ${{ '%.2f'|format(company.day_high) }}
+      {% else %}—{% endif %}
+    </span>
+  </div>
+  <div class="metric">
+    <span class="metric-label">52-week range</span>
+    <span class="metric-value">
+      {% if highs %}${{ '%.2f'|format(lows|min) }} – ${{ '%.2f'|format(highs|max) }}{% else %}—{% endif %}
+    </span>
+  </div>
+  <div class="metric">
+    <span class="metric-label">Volume</span>
+    <span class="metric-value">{{ company.volume | compact }}</span>
+  </div>
+  <div class="metric">
+    <span class="metric-label">Stored bars</span>
+    <span class="metric-value">{{ bars|length }}</span>
+  </div>
+  <div class="metric">
+    <span class="metric-label">History from</span>
+    <span class="metric-value">{% if bars %}{{ bars[0].day }}{% else %}—{% endif %}</span>
+  </div>
+</section>
+
+<!-- ── chart ─────────────────────────────────────────────── -->
+<section class="panel chart-panel">
+  <div class="panel-head">
+    <h2>Price history</h2>
+    <div class="range-buttons" id="range-buttons">
+      <button data-days="21" type="button">1M</button>
+      <button data-days="63" type="button">3M</button>
+      <button data-days="126" type="button">6M</button>
+      <button data-days="0" class="active" type="button">1Y</button>
+    </div>
+  </div>
+
+  <figure class="chart-wrap">
+    <svg id="price-chart" viewBox="0 0 900 340"
+         role="img" aria-label="Daily closing price for {{ company.symbol }}"></svg>
+    <div id="chart-tooltip" class="chart-tooltip" hidden></div>
+    <figcaption class="chart-legend">
+      <span class="key key-line"></span> Daily close
+      {% if prediction %}
+      <span class="key key-pred"></span> Next-day estimate
+      <span class="key key-band"></span> 80% error band
+      {% endif %}
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ── prediction ────────────────────────────────────────── -->
+{% if prediction %}
+<section class="panel prediction-panel">
+  <div class="panel-head">
+    <h2>Next-day estimate</h2>
+    <span class="badge {{ prediction.verdict_level }}">{{ prediction.verdict_level|title }} model fit</span>
+  </div>
+
+  <div class="prediction-grid">
+    <div class="pred-main">
+      <span class="pred-label">Estimated close for {{ prediction.target_day.strftime('%a %d %b %Y') }}</span>
+      <span class="pred-price {{ prediction.direction }}">
+        ${{ '%.2f'|format(prediction.predicted_close) }}
+      </span>
+      <span class="pred-change {{ prediction.direction }}">
+        {{ '%+.2f'|format(prediction.predicted_close - prediction.base_close) }}
+        ({{ '%+.2f'|format(prediction.predicted_return_pct) }}%)
+        from ${{ '%.2f'|format(prediction.base_close) }} on {{ prediction.base_day }}
+      </span>
+    </div>
+
+    <div class="pred-band">
+      <span class="pred-label">80% error band</span>
+      <span class="band-values">
+        ${{ '%.2f'|format(prediction.interval_low) }} – ${{ '%.2f'|format(prediction.interval_high) }}
+      </span>
+      <span class="pred-note">
+        Where the true close landed 80% of the time during backtesting. The width
+        <em>is</em> the uncertainty — a band this wide is the honest answer.
+      </span>
+    </div>
+  </div>
+
+  <p class="verdict {{ prediction.verdict_level }}">{{ prediction.verdict }}</p>
+</section>
+
+<!-- ── transparency ──────────────────────────────────────── -->
+<section class="panel">
+  <div class="panel-head">
+    <h2>Does this model actually work?</h2>
+  </div>
+  <p class="panel-sub">
+    Scored walk-forward on {{ prediction.test_rows or '—' }} held-out days: each
+    prediction below was made using only the sessions that preceded it, exactly
+    like the live forecast above.
+  </p>
+
+  <table class="metrics-table">
+    <thead>
+      <tr><th>Measure</th><th>This model</th><th>Baseline</th><th>Verdict</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
+          Mean absolute error
+          <span class="hint">average miss on the next close</span>
+        </td>
+        <td class="num">{% if prediction.backtest_mae_pct is not none %}{{ '%.2f'|format(prediction.backtest_mae_pct) }}%{% else %}—{% endif %}</td>
+        <td class="num">
+          {% if prediction.naive_mae_pct is not none %}{{ '%.2f'|format(prediction.naive_mae_pct) }}%{% else %}—{% endif %}
+          <span class="hint">no change</span>
+        </td>
+        <td>
+          {% if prediction.beats_naive is none %}—
+          {% elif prediction.beats_naive %}<span class="tag good">Better</span>
+          {% else %}<span class="tag poor">Worse</span>{% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>
+          Directional accuracy
+          <span class="hint">share of days the sign was right</span>
+        </td>
+        <td class="num">{% if prediction.directional_accuracy is not none %}{{ '%.1f'|format(prediction.directional_accuracy * 100) }}%{% else %}—{% endif %}</td>
+        <td class="num">
+          {% if prediction.baseline_accuracy is not none %}{{ '%.1f'|format(prediction.baseline_accuracy * 100) }}%{% else %}—{% endif %}
+          <span class="hint">always up</span>
+        </td>
+        <td>
+          {% if prediction.beats_baseline_direction is none %}—
+          {% elif prediction.beats_baseline_direction %}<span class="tag good">Better</span>
+          {% else %}<span class="tag poor">Worse</span>{% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>RMSE <span class="hint">penalises large misses</span></td>
+        <td class="num">{% if prediction.backtest_rmse_pct is not none %}{{ '%.2f'|format(prediction.backtest_rmse_pct) }}%{% else %}—{% endif %}</td>
+        <td class="num">—</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% if prediction.drivers %}
+  <h3 class="sub-head">What moved this forecast</h3>
+  <p class="panel-sub">
+    Standardised ridge coefficients — the effect of a one-standard-deviation
+    move in each feature on the predicted next-day return.
+  </p>
+  {% set widest = prediction.drivers | map(attribute=1) | map('abs') | max %}
+  <ul class="drivers">
+    {% for name, weight in prediction.drivers %}
+    <li>
+      <span class="driver-name">{{ name.replace('_', ' ') }}</span>
+      <span class="driver-bar">
+        <span class="driver-fill {{ 'up' if weight >= 0 else 'down' }}"
+              style="width: {{ (weight|abs / widest * 100) if widest else 0 }}%"></span>
+      </span>
+      <span class="driver-weight {{ 'up' if weight >= 0 else 'down' }}">{{ '%+.4f'|format(weight) }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <p class="model-meta">
+    Model <code>{{ prediction.model_version }}</code> ·
+    trained on {{ prediction.train_rows }} samples ·
+    computed {{ prediction.created_at.strftime('%Y-%m-%d %H:%M') }} UTC ·
+    <a href="/api/stocks/{{ company.symbol }}/prediction">view as JSON</a>
+  </p>
+</section>
+
+<section class="panel caveats">
+  <h2>Read this before you believe the number</h2>
+  <ul>
+    <li>
+      <strong>Daily returns are mostly noise.</strong> At a one-day horizon, public
+      equity markets are close to efficient. A model built from public price
+      history should not be expected to beat them, and usually doesn't.
+    </li>
+    <li>
+      <strong>The band matters more than the point.</strong> A single price is
+      false precision; the 80% band above is the real output.
+    </li>
+    <li>
+      <strong>The target date ignores market holidays.</strong> It is the next
+      weekday, which occasionally lands on a closed session.
+    </li>
+    <li>
+      <strong>This is not advice.</strong> No part of this page is a recommendation
+      to buy or sell anything.
+    </li>
+  </ul>
+</section>
+{% else %}
+<section class="panel">
+  <h2>No forecast available</h2>
+  <p>{{ notice or "There isn't enough stored history for this ticker to fit a model." }}</p>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script id="chart-data" type="application/json">{{ chart_json | safe }}</script>
+<script id="prediction-data" type="application/json">{{ prediction_json | safe }}</script>
+<script src="{{ url_for('static', path='/chart.js') }}"></script>
+{% endblock %}

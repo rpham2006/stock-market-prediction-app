@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Search “{{ query }}” — StockForecast{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h1 class="search-heading">Results for “{{ query }}”</h1>
+
+  {% if matches %}
+    <ul class="result-list">
+      {% for match in matches %}
+      <li>
+        <a href="/stock/{{ match.symbol }}">
+          <span class="result-symbol">{{ match.symbol }}</span>
+          <span class="result-name">{{ match.name }}</span>
+          <span class="result-meta">{{ match.exchange }} · {{ match.quote_type|title }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">
+      No tradeable equities or ETFs matched “{{ query }}”. Try a ticker symbol
+      such as <a href="/stock/AAPL">AAPL</a>, or a company name like
+      <a href="/search?q=microsoft">Microsoft</a>.
+    </p>
+  {% endif %}
+</section>
+{% endblock %}

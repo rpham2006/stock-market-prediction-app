@@ -1,0 +1,40 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Secrets — NEVER commit these
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Data & models (regenerable; keep the repo small)
+data/*.csv
+data/*.parquet
+data/*.db
+*.pkl
+*.joblib
+
+# Node (for later)
+node_modules/
+.next/
+out/
+dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# Logs
+*.log
+logs/

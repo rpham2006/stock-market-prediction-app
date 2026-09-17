@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Stock Market Prediction App{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Next-day price estimates, with the receipts.</h1>
+  <p>
+    Search any ticker. The app pulls a year of daily history, stores it, fits a
+    ridge-regression model on technical features, and shows you the next
+    session's estimated close — alongside the backtest that says whether that
+    estimate is worth anything at all.
+  </p>
+
+  <form class="search search-hero" action="/search" method="get" role="search">
+    <input type="search" name="q" placeholder="AAPL, MSFT, NVDA, Coca-Cola…"
+           aria-label="Search for a stock" autocomplete="off" required autofocus>
+    <button type="submit">Search</button>
+  </form>
+
+  <p class="quick">
+    Try:
+    {% for sym in ["AAPL", "MSFT", "NVDA", "SPY", "KO"] %}
+      <a href="/stock/{{ sym }}">{{ sym }}</a>{% if not loop.last %} · {% endif %}
+    {% endfor %}
+  </p>
+</section>
+
+{% if companies %}
+<section class="panel">
+  <h2>Stored locally</h2>
+  <p class="panel-sub">
+    {{ companies|length }} ticker{{ '' if companies|length == 1 else 's' }} already in the
+    database. These load without touching the network.
+  </p>
+
+  <div class="ticker-grid">
+    {% for company in companies %}
+    <a class="ticker-card" href="/stock/{{ company.symbol }}">
+      <div class="ticker-head">
+        <span class="ticker-symbol">{{ company.symbol }}</span>
+        {% if company.change_percent is not none %}
+        <span class="pill {{ 'up' if company.change_percent >= 0 else 'down' }}">
+          {{ '%+.2f'|format(company.change_percent) }}%
+        </span>
+        {% endif %}
+      </div>
+      <div class="ticker-name">{{ company.name }}</div>
+      <div class="ticker-price">
+        {% if company.last_price is not none %}
+          ${{ '%.2f'|format(company.last_price) }}
+        {% else %}
+          —
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="panel how">
+  <h2>How it works</h2>
+  <ol class="steps">
+    <li>
+      <strong>Fetch &amp; store.</strong> A year of daily OHLCV bars per ticker, written to
+      a database keyed on <code>(symbol, day)</code> so refreshes never duplicate rows.
+    </li>
+    <li>
+      <strong>Build features.</strong> 13 technical inputs — trailing returns, distance
+      from moving averages, realised volatility, RSI, intraday range position, volume
+      ratio — all computed only from data known at that day's close.
+    </li>
+    <li>
+      <strong>Fit &amp; validate.</strong> Ridge regression, scored walk-forward: every
+      prediction is made using only the days before it, then compared against
+      "tomorrow equals today."
+    </li>
+    <li>
+      <strong>Report honestly.</strong> If the model doesn't beat that baseline, the page
+      says so in plain English instead of showing a confident number.
+    </li>
+  </ol>
+</section>
+{% endblock %}

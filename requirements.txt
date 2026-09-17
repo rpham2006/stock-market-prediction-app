@@ -1,0 +1,22 @@
+# Web stack
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+jinja2==3.1.6
+pydantic==2.13.5
+
+# Persistence
+SQLAlchemy==2.0.52
+# Postgres instead of SQLite? add:
+# psycopg[binary]==3.2.*
+
+# Model
+numpy==2.5.2
+
+# Research scripts only (research/baselines.py) — the app itself
+# fetches through stockkit and needs neither of these.
+pandas==3.0.5
+yfinance==1.6.0
+
+# Tests
+pytest==9.1.1
+httpx==0.28.1

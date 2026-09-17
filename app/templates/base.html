@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Stock Market Prediction App{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>&#128200;</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark">&#9650;</span>
+      <span>Stock<strong>Forecast</strong></span>
+    </a>
+
+    <form class="search" action="/search" method="get" role="search">
+      <input type="search" name="q" placeholder="Search a ticker or company — AAPL, Microsoft…"
+             aria-label="Search for a stock" autocomplete="off" required
+             value="{{ query|default('', true) }}">
+      <button type="submit">Search</button>
+    </form>
+  </header>
+
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <p class="disclaimer"><strong>Disclaimer.</strong> {{ disclaimer }}</p>
+    <p class="colophon">
+      Data from Yahoo Finance &middot; stored locally &middot;
+      model: ridge regression, walk-forward validated &middot;
+      <a href="/docs">API docs</a>
+    </p>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
