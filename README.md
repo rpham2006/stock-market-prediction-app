@@ -260,6 +260,12 @@ the pipeline, the honest measurement, and the transparency — not alpha.
   components, max pairwise correlation 0.95. They're all transformations of one
   price series.
 
+`research/experiments.py` then tries the fixes that need no new data. A much
+stronger ridge penalty helps, but only by shrinking the forecast toward the
+stock's average return (MAE ratio 1.009 → 0.998, still no edge). Predicting the
+return in excess of SPY and winsorising the training target change nothing
+meaningful.
+
 The constraint is **information, not modelling**. Improving this requires
 different inputs — earnings surprises, options-implied volatility,
 cross-sectional ranking, news sentiment — not a bigger model or more bars.
