@@ -191,6 +191,9 @@ class TrackRecordOut(BaseModel):
     bias_pct: float = Field(
         ..., description="Mean signed error. Away from zero means a systematic skew."
     )
+    band_coverage: float = Field(
+        ..., description="Share of real closes inside the 80% band. Should be near 0.80."
+    )
     beats_naive: bool
     is_meaningful: bool = Field(
         ..., description="False below ~100 samples, where direction is a coin flip."

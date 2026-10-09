@@ -190,6 +190,7 @@ def test_track_record_endpoint(api, session, client):
     assert body["n"] == 1
     assert body["is_meaningful"] is False        # one sample proves nothing
     assert body["mae_pct"] == pytest.approx(0.0, abs=1e-6)
+    assert body["band_coverage"] == pytest.approx(1.0)
 
 
 def test_scored_predictions_endpoint_exposes_outcomes(api, session, client):

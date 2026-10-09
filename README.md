@@ -216,6 +216,10 @@ distinguishable from a coin flip — roughly 5 months of daily runs on one ticke
 or a few weeks across 22. Until then `is_meaningful` is `false`, and the API
 says so rather than letting you over-read a small sample.
 
+`band_coverage` checks the band's own promise: the share of real closes that
+landed inside the 80% band. Near 0.80 is honest; well below means the band is
+overconfident, well above means it is wider than it needs to be.
+
 Measured across 22 tickers (2,464 held-out predictions): the model beat the
 no-change baseline on price for **2 of 22**, pooled directional accuracy was
 **51.1%** (z = 1.06, not significant). It has no demonstrated edge — see below.

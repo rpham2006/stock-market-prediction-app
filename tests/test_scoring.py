@@ -158,6 +158,21 @@ def test_track_record_aggregates_scored_predictions(session, client):
     # Every prediction was 0.5% high, so the bias is systematically positive.
     assert record.bias_pct > 0
     assert not record.is_meaningful          # 20 samples is not evidence
+    # Each band is predicted_close +/- 2%, and the close is 0.5% below it.
+    assert record.band_coverage == pytest.approx(1.0)
+
+
+def test_band_coverage_counts_closes_outside_the_band(session, client):
+    bars = _seed(session, client)
+
+    for i, miss in enumerate([1.0, 1.0, 1.0, 1.05]):   # last one: 5% high
+        base, target = bars[-i - 3], bars[-i - 2]
+        repo.save_prediction(
+            session, _prediction("AAPL", base, target.day, target.close * miss)
+        )
+    scoring.score_predictions(session)
+
+    assert scoring.track_record(session).band_coverage == pytest.approx(0.75)
 
 
 def test_track_record_filters_by_symbol(session, client):

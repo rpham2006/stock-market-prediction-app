@@ -119,6 +119,8 @@ def main(argv: list[str] | None = None) -> int:
             log.info("    mean signed error:    %+.2f%% (%s)",
                      record.bias_pct,
                      "overshoots" if record.bias_pct > 0 else "undershoots")
+            log.info("    80%% band coverage:    %.1f%% (target 80%%)",
+                     record.band_coverage * 100)
             if not record.is_meaningful:
                 log.info("    NOTE: under 100 samples — not yet statistically meaningful.")
         else:

@@ -192,6 +192,7 @@ def _track_out(record: scoring.TrackRecord) -> TrackRecordOut:
         naive_mae_pct=record.naive_mae_pct,
         directional_accuracy=record.directional_accuracy,
         bias_pct=record.bias_pct,
+        band_coverage=record.band_coverage,
         beats_naive=record.beats_naive,
         is_meaningful=record.is_meaningful,
     )

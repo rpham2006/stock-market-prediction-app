@@ -88,6 +88,7 @@ class TrackRecord:
     naive_mae_pct: float = 0.0
     directional_accuracy: float = 0.0
     bias_pct: float = 0.0            # mean signed error; non-zero = systematic skew
+    band_coverage: float = 0.0       # share of closes inside the 80% band; target 0.80
 
     @property
     def beats_naive(self) -> bool:
@@ -112,6 +113,8 @@ def track_record(session: Session, symbol: str | None = None) -> TrackRecord:
         dtype=float,
     )
     directional = [p.direction_correct for p in scored if p.direction_correct is not None]
+    # The band's own promise, checked: ~80% of real closes should land inside.
+    inside = [p.interval_low <= p.actual_close <= p.interval_high for p in scored]
 
     return TrackRecord(
         n=len(scored),
@@ -121,6 +124,7 @@ def track_record(session: Session, symbol: str | None = None) -> TrackRecord:
             float(np.mean(directional)) if directional else 0.0
         ),
         bias_pct=float(np.mean(errors)),
+        band_coverage=float(np.mean(inside)),
     )
 
 
