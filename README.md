@@ -215,8 +215,33 @@ as it's back on. Missed days cost samples, never accuracy:
 - A catch-up run during US market hours won't score against the unfinished day.
   Scoring waits until 16:30 New York time on the target day.
 
-For unbroken daily coverage without your PC, move the job and database to an
-always-on machine (a small VPS, with `DATABASE_URL` pointing at Postgres).
+### Or run it in the cloud, with your PC off
+
+`.github/workflows/daily-audit.yml` runs the same audit on GitHub's machines
+every weekday after the close, writing to a hosted Postgres instead of the local
+SQLite file. Free for a public repo.
+
+1. Create a free Postgres database (e.g. [Neon](https://neon.tech)) and copy its
+   connection string (`postgresql://...`). Paste it as is; the app picks the
+   driver itself.
+2. Copy your existing data across once, so the track record carries on:
+   ```bash
+   .venv\Scripts\python.exe -m scripts.copy_database --to "postgresql://..."
+   ```
+3. On GitHub: **Settings → Secrets and variables → Actions → New repository
+   secret**, named `DATABASE_URL`, holding the connection string.
+4. **Actions → Daily accuracy audit → Run workflow** to test it once by hand.
+5. Point the local app at the same database so the dashboard shows the cloud
+   results (then open a new terminal):
+   ```bash
+   setx DATABASE_URL "postgresql://..."
+   ```
+
+With the cloud job running there's no need for the Windows scheduled task. Both
+writing to the same database would be harmless (scoring and audits are
+idempotent), just redundant. The run fails, and GitHub emails you, if the secret
+is missing or every ticker failed. GitHub pauses schedules on a public repo after
+60 days without a commit; one click on the Actions tab resumes it.
 
 Inspect or remove it:
 

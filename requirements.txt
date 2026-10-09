@@ -6,8 +6,9 @@ pydantic==2.13.5
 
 # Persistence
 SQLAlchemy==2.0.52
-# Postgres instead of SQLite? add:
-# psycopg[binary]==3.2.*
+# Postgres driver, used when DATABASE_URL points at one (the hosted DB the
+# scheduled GitHub Actions audit writes to).
+psycopg[binary]==3.3.6
 
 # Model
 numpy==2.5.2

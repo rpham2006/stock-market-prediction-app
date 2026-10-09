@@ -16,6 +16,19 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
 
+def _database_url(url: str) -> str:
+    """Point a plain Postgres URL at the psycopg 3 driver.
+
+    Hosted providers (Neon, Supabase, Heroku) hand out `postgres://` or
+    `postgresql://` URLs, which SQLAlchemy would route to psycopg2 — not
+    installed. Rewriting the scheme means their string can be pasted as is.
+    """
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 def _env_int(name: str, default: int) -> int:
     try:
         return int(os.environ[name])
@@ -29,10 +42,10 @@ class Settings:
 
     # --- storage -------------------------------------------------
     # Swap to Postgres with:
-    #   set DATABASE_URL=postgresql+psycopg://user:pw@host/dbname
+    #   set DATABASE_URL=postgresql://user:pw@host/dbname
     # Nothing else in the app changes; SQLAlchemy handles the dialect.
-    database_url: str = os.environ.get(
-        "DATABASE_URL", f"sqlite:///{DATA_DIR / 'stockapp.db'}"
+    database_url: str = _database_url(
+        os.environ.get("DATABASE_URL", f"sqlite:///{DATA_DIR / 'stockapp.db'}")
     )
 
     # --- data window --------------------------------------------

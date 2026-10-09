@@ -1,0 +1,58 @@
+# Daily accuracy audit, run by GitHub instead of your PC.
+#
+# Scores yesterday's forecasts, makes tomorrow's, and re-runs the backtest,
+# writing everything to the hosted Postgres in the DATABASE_URL secret.
+# Repo -> Settings -> Secrets and variables -> Actions -> New repository secret.
+#
+# This repo is public, so these logs are too. They hold market data and model
+# scores only; GitHub masks the secret if anything ever echoes it.
+
+name: Daily accuracy audit
+
+on:
+  schedule:
+    # 22:30 UTC on weekdays = 18:30 New York in summer, 17:30 in winter:
+    # after the close either way. GitHub may start scheduled runs late.
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch: # the "Run workflow" button, for testing
+
+concurrency:
+  group: daily-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run the audit
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # Without the secret the app would quietly fall back to a SQLite
+          # file that vanishes with the runner — a green run that saved nothing.
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set"
+            exit 1
+          fi
+          python -m scripts.daily_audit
+
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-audit-log
+          path: logs/daily_audit.log
+          retention-days: 30
+          if-no-files-found: ignore
