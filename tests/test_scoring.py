@@ -282,6 +282,19 @@ def test_audit_defaults_to_tracked_plus_fixed_symbols(session, client):
     assert [run.symbol for run in report.runs] == ["AAPL", "MSFT", "KO"]
 
 
+def test_audit_refetches_bars_even_when_recently_refreshed(session, client, monkeypatch):
+    service.get_dashboard(session, "AAPL", client)        # bars now "fresh"
+    calls = []
+    original = client.get_history
+    monkeypatch.setattr(
+        client, "get_history", lambda *a, **k: calls.append(a) or original(*a, **k)
+    )
+
+    scoring.audit_universe(session, client, symbols=["AAPL"])
+
+    assert calls, "the audit must pull the latest close, not trust the TTL"
+
+
 def test_mae_ratio_matches_its_inputs(session, client):
     run = scoring.audit_universe(session, client, symbols=["AAPL"]).runs[0]
     assert run.mae_ratio == pytest.approx(run.mae_pct / run.naive_mae_pct)

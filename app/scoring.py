@@ -222,8 +222,10 @@ def audit_universe(
     for symbol in symbols:
         try:
             # Refresh first so the backtest sees the newest close, and so
-            # yesterday's prediction has a bar to be scored against.
-            service.refresh_symbol(session, symbol, client)
+            # yesterday's prediction has a bar to be scored against. Forced:
+            # bars fetched before today's close still look "fresh" to the
+            # page-view TTL, and would hide the close this job exists to score.
+            service.refresh_symbol(session, symbol, client, force=True)
         except MarketDataError as exc:
             logger.warning("%s: refresh failed — %s", symbol, exc)
             report.failures.append((symbol, str(exc)))
