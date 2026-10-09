@@ -266,6 +266,16 @@ stock's average return (MAE ratio 1.009 → 0.998, still no edge). Predicting th
 return in excess of SPY and winsorising the training target change nothing
 meaningful.
 
+Two further experiments go after that missing information with free data:
+
+- `research/market_context.py` adds SPY and VIX features to the next-day
+  model. It gets slightly *worse* (R² −0.018 → −0.025); market-wide signals
+  are already in the price.
+- `research/cross_section.py` drops "will it go up?" for "which stocks beat the
+  others next week?" across 55 large caps over 10 years. No factor clears
+  |t| > 2. 12-1 momentum is the only consistent one (IC +0.020, t = 1.35), and
+  survivorship bias in a hand-picked universe flatters exactly that factor.
+
 The constraint is **information, not modelling**. Improving this requires
 different inputs — earnings surprises, options-implied volatility,
 cross-sectional ranking, news sentiment — not a bigger model or more bars.

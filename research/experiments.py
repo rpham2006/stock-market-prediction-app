@@ -188,15 +188,16 @@ def pool(results: list[dict[str, np.ndarray]]) -> dict[str, dict[str, float]]:
 # --- Reporting ---------------------------------------------------------------
 
 def print_table(title: str, scores: dict[str, dict[str, float]]) -> None:
-    print("=" * 78)
+    w = max(14, *(len(name) + 2 for name in scores))
+    print("=" * (w + 64))
     print(title)
-    print("=" * 78)
-    print(f"{'variant':<14}{'dir acc':>9}{'baseline':>10}{'edge':>8}{'se':>6}"
+    print("=" * (w + 64))
+    print(f"{'variant':<{w}}{'dir acc':>9}{'baseline':>10}{'edge':>8}{'se':>6}"
           f"{'MAE ratio':>11}{'OOS R2':>10}{'n':>7}")
-    print("-" * 78)
+    print("-" * (w + 64))
     for name, s in scores.items():
         se = math.sqrt(s["directional"] * (1 - s["directional"]) / s["n"])
-        print(f"{name:<14}{s['directional'] * 100:>8.1f}%{s['baseline'] * 100:>9.1f}%"
+        print(f"{name:<{w}}{s['directional'] * 100:>8.1f}%{s['baseline'] * 100:>9.1f}%"
               f"{s['edge'] * 100:>+8.1f}{se * 100:>6.1f}"
               f"{s['mae_ratio']:>11.3f}{s['r2']:>10.4f}{s['n']:>7}")
     print()
