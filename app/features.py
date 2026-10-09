@@ -42,6 +42,9 @@ FEATURE_NAMES: tuple[str, ...] = (
 # lookback, one target, and a training set worth the name.
 MIN_BARS = LOOKBACK + 30
 
+# RiskMetrics' daily decay for the EWMA volatility estimate.
+EWMA_DECAY = 0.94
+
 
 @dataclass(frozen=True)
 class FeatureSet:
@@ -50,12 +53,18 @@ class FeatureSet:
     `x_live` is deliberately separate: it is the feature row for the most
     recent bar, whose target hasn't happened yet. It is the only row the
     live forecast uses, and it must never appear in training.
+
+    `sigma` is not a model input. It sizes the error band: each row's
+    volatility as known at that row's close, so the band can widen on
+    wild days and narrow on calm ones.
     """
 
     x: np.ndarray            # (n_samples, n_features) — rows with known targets
     y: np.ndarray            # (n_samples,) next-day simple return, as a decimal
     days: list[date]         # decision day for each row of x
+    sigma: np.ndarray        # (n_samples,) EWMA daily volatility at each decision day
     x_live: np.ndarray       # (n_features,) features at the latest close
+    sigma_live: float        # EWMA daily volatility at the latest close
     base_day: date           # the latest close's date
     base_close: float        # the latest (unadjusted) close, for display
     base_model_close: float  # the latest adjusted close, what y is relative to
@@ -114,6 +123,22 @@ def _rolling_std(values: np.ndarray, window: int) -> np.ndarray:
     out = np.full(values.shape, np.nan)
     for i in range(window - 1, values.size):
         out[i] = float(np.std(values[i - window + 1: i + 1]))
+    return out
+
+
+def ewma_volatility(returns: np.ndarray, decay: float = EWMA_DECAY) -> np.ndarray:
+    """Exponentially weighted daily volatility, aligned to `returns`.
+
+    Index i includes return i, so it is known at that day's close. Seeded
+    with the variance of the first month, which the LOOKBACK trim drops
+    from training anyway.
+    """
+    returns = np.asarray(returns, dtype=float)
+    out = np.empty(returns.size)
+    variance = float(np.var(returns[1:LOOKBACK + 1]))
+    for i in range(returns.size):
+        variance = decay * variance + (1.0 - decay) * returns[i] ** 2
+        out[i] = np.sqrt(variance)
     return out
 
 
@@ -182,6 +207,7 @@ def build_features(
     daily_returns[1:] = _safe_ratio(closes[1:], closes[:-1])
     vol_10 = np.nan_to_num(_rolling_std(daily_returns, 10), nan=0.0)
     vol_20 = np.nan_to_num(_rolling_std(daily_returns, 20), nan=0.0)
+    sigma = ewma_volatility(daily_returns)
 
     # --- oscillator + intraday position + participation ---
     rsi_14 = _rsi(closes, 14) / 100.0
@@ -223,7 +249,9 @@ def build_features(
         x=x,
         y=y,
         days=sample_days,
+        sigma=sigma[first: last_trainable + 1],
         x_live=matrix[n - 1],
+        sigma_live=float(sigma[n - 1]),
         base_day=days[n - 1],
         base_close=float(np.asarray(display_closes, dtype=float)[n - 1]),
         base_model_close=float(closes[n - 1]),

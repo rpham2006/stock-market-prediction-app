@@ -27,6 +27,12 @@ from .features import FeatureSet
 
 MODEL_VERSION = "ridge-v1"
 
+# How hard the error band reacts to volatility: errors are measured in units
+# of sigma**BAND_BETA. 0 would be a fixed-width band, 1 fully proportional.
+# research/intervals.py found full scaling overreacts and 0.5 scores best,
+# beating the fixed band on 10 of 10 tickers.
+BAND_BETA = 0.5
+
 
 # ---------------------------------------------------------------
 # The estimator
@@ -108,6 +114,8 @@ class BacktestResult:
     naive_mae_pct: float             # error of "tomorrow's close = today's"
     residual_low_pct: float          # 10th percentile of signed error
     residual_high_pct: float         # 90th percentile of signed error
+    band_low: float                  # same percentiles, in units of sigma**BAND_BETA
+    band_high: float
     n_test: int
     n_train: int
 
@@ -166,6 +174,11 @@ def walk_forward_backtest(
     errors_pct = (predictions - actuals) * 100.0
     absolute_pct = np.abs(errors_pct)
 
+    # Each error rescaled by the volatility known when it was made, so the
+    # band's percentiles describe "how wrong, relative to how wild the
+    # market was" rather than one width for every day.
+    scaled = (predictions - actuals) / _band_scale(features.sigma[min_train:])
+
     # The naive comparison: predict zero return every day. Its error is
     # simply the size of the move that actually happened.
     naive_mae_pct = float(np.mean(np.abs(actuals)) * 100.0)
@@ -187,9 +200,16 @@ def walk_forward_backtest(
         naive_mae_pct=naive_mae_pct,
         residual_low_pct=float(np.percentile(errors_pct, 10)),
         residual_high_pct=float(np.percentile(errors_pct, 90)),
+        band_low=float(np.percentile(scaled, 10)),
+        band_high=float(np.percentile(scaled, 90)),
         n_test=int(n - min_train),
         n_train=int(min_train),
     )
+
+
+def _band_scale(sigma: np.ndarray | float) -> np.ndarray:
+    """sigma**BAND_BETA, floored so a flat stretch can't divide by zero."""
+    return np.maximum(np.asarray(sigma, dtype=float), 1e-6) ** BAND_BETA
 
 
 # ---------------------------------------------------------------
@@ -248,6 +268,8 @@ def forecast_next_day(
     errors, applied around the point estimate. It is an empirical claim —
     "80% of the time this model was this wrong" — not a theoretical
     confidence interval, and it makes no distributional assumption.
+    Errors are measured relative to the volatility at the time, then
+    rescaled by today's, so the band is wider when the market is wild.
     """
     backtest = walk_forward_backtest(features, alpha=alpha, min_train=min_train)
 
@@ -261,8 +283,9 @@ def forecast_next_day(
     if backtest is not None:
         # Subtract, because residual = predicted - actual: an error band
         # skewed high means the model tends to overshoot.
-        low = base * (1.0 + (predicted_return_pct - backtest.residual_high_pct) / 100.0)
-        high = base * (1.0 + (predicted_return_pct - backtest.residual_low_pct) / 100.0)
+        scale = float(_band_scale(features.sigma_live))
+        low = base * (1.0 + predicted_return - backtest.band_high * scale)
+        high = base * (1.0 + predicted_return - backtest.band_low * scale)
     else:
         # No test set — fall back to the in-sample spread of daily moves.
         spread = float(np.std(features.y)) * 1.2816      # ~80% of a normal

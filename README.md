@@ -155,6 +155,11 @@ every score it produced would be a lie.
 **The 80% band** is the 10th–90th percentile of the backtest's own errors. It is
 an empirical claim — "80% of the time the model was this wrong" — not a
 theoretical confidence interval, and assumes nothing about the distribution.
+Each error is measured relative to the volatility at the time (EWMA, in units
+of sigma^0.5), then rescaled by today's, so the band widens when the market is
+wild and narrows when it is calm. `research/intervals.py` shows why half
+scaling rather than full: it beat the fixed-width band on 10 of 10 tickers,
+mostly by fixing under-coverage on volatile days (75% → 80%).
 
 ---
 

@@ -4,6 +4,7 @@ Model tests — does the estimator learn, and is the scoring honest?
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 
 import numpy as np
@@ -11,6 +12,7 @@ import pytest
 
 from app.features import build_features
 from app.predictor import (
+    BAND_BETA,
     RidgeRegressor,
     forecast_next_day,
     next_trading_day,
@@ -149,6 +151,23 @@ def test_forecast_is_internally_consistent(bars):
     # The stated return must actually reproduce the stated price.
     implied = forecast.base_close * (1 + forecast.predicted_return_pct / 100)
     assert forecast.predicted_close == pytest.approx(implied, rel=1e-9)
+
+
+def test_band_widens_with_volatility(bars):
+    """Same model, same history — only today's volatility differs.
+
+    The band is measured in units of sigma**BAND_BETA, so quadrupling
+    sigma must widen it by exactly 4**BAND_BETA and leave the point
+    forecast where it was.
+    """
+    features = _features(bars)
+    calm = forecast_next_day("TEST", features)
+    wild = forecast_next_day("TEST", replace(features, sigma_live=features.sigma_live * 4))
+
+    assert wild.predicted_close == pytest.approx(calm.predicted_close)
+    calm_width = calm.interval_high - calm.interval_low
+    wild_width = wild.interval_high - wild.interval_low
+    assert wild_width == pytest.approx(calm_width * 4**BAND_BETA, rel=1e-9)
 
 
 def test_forecast_stays_in_a_plausible_range(bars):

@@ -96,6 +96,17 @@ def test_no_lookahead_bias(bars):
     unaffected = baseline.x.shape[0] - 4
     np.testing.assert_allclose(baseline.x[:unaffected], after.x[:unaffected], rtol=1e-12)
     np.testing.assert_allclose(baseline.y[:unaffected], after.y[:unaffected], rtol=1e-12)
+    np.testing.assert_allclose(baseline.sigma[:unaffected], after.sigma[:unaffected], rtol=1e-12)
+
+
+def test_sigma_is_a_positive_daily_volatility(bars):
+    features = _build(bars)
+    assert features.sigma.shape == features.y.shape
+    assert np.all(features.sigma > 0)
+    assert features.sigma_live > 0
+    # make_bars moves about 1-2% a day; a daily sigma far outside that
+    # means the units (decimal vs percent) have gone wrong.
+    assert 0.001 < float(np.median(features.sigma)) < 0.1
 
 
 def test_rsi_stays_in_range(bars):

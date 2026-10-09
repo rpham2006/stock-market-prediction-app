@@ -122,8 +122,9 @@
         ${{ '%.2f'|format(prediction.interval_low) }} – ${{ '%.2f'|format(prediction.interval_high) }}
       </span>
       <span class="pred-note">
-        Where the true close landed 80% of the time during backtesting. The width
-        <em>is</em> the uncertainty — a band this wide is the honest answer.
+        Where the true close landed 80% of the time during backtesting, sized
+        for how volatile the stock is right now. The width <em>is</em> the
+        uncertainty — a band this wide is the honest answer.
       </span>
     </div>
   </div>

@@ -62,6 +62,7 @@ import numpy as np
 # why_it_fails puts the project root on sys.path, so app/stockkit resolve.
 from why_it_fails import LOOKBACK, MIN_TRAIN, TICKERS, YEARS, features_for, load_series
 
+from app.features import ewma_volatility
 from app.predictor import RidgeRegressor
 
 # --- Configuration -----------------------------------------------------------
@@ -71,7 +72,6 @@ LEVEL = 0.80
 QUANTILES = (10.0, 90.0)
 RESIDUAL_WINDOW = 110        # errors the app's backtest yields from 1y of bars
 WARMUP = 60                  # errors needed before the first band
-EWMA_LAMBDA = 0.94           # RiskMetrics' daily decay
 BETAS = (0.0, 0.25, 0.5, 0.75, 1.0)
 
 
@@ -89,16 +89,6 @@ def rolling_vol(returns: np.ndarray, window: int = 20) -> np.ndarray:
     out = np.full(returns.size, np.nan)
     for i in range(window, returns.size):
         out[i] = returns[i - window + 1: i + 1].std()
-    return out
-
-
-def ewma_vol(returns: np.ndarray, decay: float = EWMA_LAMBDA) -> np.ndarray:
-    """Exponentially weighted volatility, updated with each day's return."""
-    out = np.empty(returns.size)
-    variance = float(np.var(returns[1:21]))      # seed on the first month
-    for i in range(returns.size):
-        variance = decay * variance + (1 - decay) * returns[i] ** 2
-        out[i] = np.sqrt(variance)
     return out
 
 
@@ -120,7 +110,7 @@ def walk_forward_bands(bars: list) -> dict | None:
     # Row j's decision day is bar LOOKBACK+j, so its volatility is the one
     # computed through that day's close — known when the forecast is made.
     decision = np.arange(LOOKBACK, LOOKBACK + n)
-    sigma = ewma_vol(returns)[decision]
+    sigma = ewma_volatility(returns)[decision]   # what the app ships
     regime = rolling_vol(returns)[decision]
 
     predictions = np.empty(n)
