@@ -226,6 +226,35 @@ Public equity markets are close to efficient at a one-day horizon. A model built
 from public price history should not be expected to beat them. The value here is
 the pipeline, the honest measurement, and the transparency — not alpha.
 
+### Why, specifically
+
+`research/why_it_fails.py` measures this rather than asserting it — 10 tickers,
+5 years, ~8,300 out-of-sample predictions per horizon:
+
+```bash
+.venv\Scripts\python.exe research\why_it_fails.py
+```
+
+- **Out-of-sample R² is negative** at every horizon (−0.018 at 1 day). The model
+  is worse than predicting the average return — it adds error rather than
+  explaining variance.
+- **Signal-to-noise is 0.017–0.076.** The expected daily move is 2–8% of a
+  typical daily move; the noise is 13–60× the signal.
+- **A longer horizon doesn't help**, and this is the subtle one. Directional
+  accuracy rises 50.6% → 57.7% from 1 to 20 days, but the always-up baseline
+  rises *faster*, 53.8% → 59.8%. The edge stays negative. Reporting the 57.7%
+  without its baseline would mean shipping a model worse than always guessing up.
+- **More data doesn't help.** Growing the training set 120 → 900 rows moves the
+  MAE ratio 1.019 → 1.003 — converging *toward* tying the naive baseline, never
+  below it. That's the signature of no signal existing, not of too little data.
+- **The 13 features are really ~7.** 95% of their variance sits in 7 principal
+  components, max pairwise correlation 0.95. They're all transformations of one
+  price series.
+
+The constraint is **information, not modelling**. Improving this requires
+different inputs — earnings surprises, options-implied volatility,
+cross-sectional ranking, news sentiment — not a bigger model or more bars.
+
 Known limitations, all visible in the UI:
 
 - `next_trading_day` skips weekends but **not market holidays**.
