@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 
 import numpy as np
 from sqlalchemy.orm import Session
@@ -43,11 +44,31 @@ DEFAULT_UNIVERSE = (
 )
 
 
+EXCHANGE_TZ = ZoneInfo("America/New_York")
+# The bell is 16:00; give the data provider time to settle the official close.
+SESSION_FINAL_AT = time(16, 30)
+
+
 # ---------------------------------------------------------------
 # 1. Score past predictions against reality
 # ---------------------------------------------------------------
 
-def score_predictions(session: Session, symbol: str | None = None) -> list[Prediction]:
+def session_is_final(day: date, now: datetime | None = None) -> bool:
+    """Has `day`'s US session closed, so its bar holds the real close?
+
+    During market hours the provider returns today's bar with the latest
+    trade as its "close". Scoring against that would be permanent — a
+    scored row is never revisited — so it has to wait.
+    """
+    now = (now or datetime.now(EXCHANGE_TZ)).astimezone(EXCHANGE_TZ)
+    return day < now.date() or (day == now.date() and now.time() >= SESSION_FINAL_AT)
+
+
+def score_predictions(
+    session: Session,
+    symbol: str | None = None,
+    now: datetime | None = None,
+) -> list[Prediction]:
     """Fill in the outcome of every prediction whose target day has closed.
 
     Returns the predictions newly scored. Safe to run repeatedly: an
@@ -57,8 +78,8 @@ def score_predictions(session: Session, symbol: str | None = None) -> list[Predi
 
     for prediction in repo.unscored_predictions(session, symbol):
         bar = repo.bar_on_or_after(session, prediction.symbol, prediction.target_day)
-        if bar is None:
-            continue                     # that session hasn't happened yet
+        if bar is None or not session_is_final(bar.day, now):
+            continue                     # that session hasn't finished yet
 
         actual = bar.close
         prediction.actual_close = actual
@@ -252,6 +273,11 @@ def audit_universe(
 
 
 def default_universe(session: Session) -> list[str]:
-    """Audit whatever is tracked; fall back to a fixed spread of sectors."""
+    """Everything tracked, plus a fixed spread of sectors.
+
+    Always including the fixed set means the live track record grows by
+    ~22 scored predictions a day however few tickers have been viewed,
+    reaching the ~100 needed to mean anything in about a week.
+    """
     tracked = [company.symbol for company in repo.list_companies(session)]
-    return tracked or list(DEFAULT_UNIVERSE)
+    return list(dict.fromkeys([*tracked, *DEFAULT_UNIVERSE]))

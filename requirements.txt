@@ -12,6 +12,10 @@ SQLAlchemy==2.0.52
 # Model
 numpy==2.5.2
 
+# Exchange time zone for "has today's session closed?". Windows ships no
+# IANA tz database, so zoneinfo needs this package there.
+tzdata==2026.3
+
 # Research scripts only (research/baselines.py) — the app itself
 # fetches through stockkit and needs neither of these.
 pandas==3.0.5

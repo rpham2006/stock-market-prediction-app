@@ -191,13 +191,32 @@ symbol failed, so a scheduler can alert on it.
 
 ### Schedule it (Windows)
 
-```bash
-schtasks /create /tn "StockForecast daily audit" /tr "'C:\Users\Ryan\Stock market prediction app\run_daily_audit.bat'" /sc daily /st 18:30
+Run this in PowerShell. It's the PowerShell form because `schtasks` can't set
+the catch-up option:
+
+```powershell
+$action   = New-ScheduledTaskAction -Execute "C:\Users\Ryan\Stock market prediction app\run_daily_audit.bat"
+$trigger  = New-ScheduledTaskTrigger -Daily -At 6:30pm
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable
+Register-ScheduledTask -TaskName "StockForecast daily audit" -Action $action -Trigger $trigger -Settings $settings
 ```
 
-18:30 local is after the US close, so the day's final bar exists. The task only
-runs while your machine is on; add `/ru SYSTEM` to run it logged-out, or move
-the job to a small VPS if you want unbroken daily coverage.
+18:30 local is after the US close, so the day's final bar exists.
+
+**Your PC has to be on for it to run, but not every day.** With
+`-StartWhenAvailable`, a run missed while the machine was off happens as soon
+as it's back on. Missed days cost samples, never accuracy:
+
+- Forecasts already stored are scored whenever the job next runs — it finds the
+  target day's bar then.
+- A missed day means no forecast was made for the following session, so the
+  track record grows more slowly. Nothing is backfilled: a forecast made after
+  the fact would not be hindsight-free.
+- A catch-up run during US market hours won't score against the unfinished day.
+  Scoring waits until 16:30 New York time on the target day.
+
+For unbroken daily coverage without your PC, move the job and database to an
+always-on machine (a small VPS, with `DATABASE_URL` pointing at Postgres).
 
 Inspect or remove it:
 
@@ -212,8 +231,9 @@ schtasks /delete /tn "StockForecast daily audit" /f
 ### Reading the results
 
 The track record needs **~100 scored predictions** before direction is
-distinguishable from a coin flip — roughly 5 months of daily runs on one ticker,
-or a few weeks across 22. Until then `is_meaningful` is `false`, and the API
+distinguishable from a coin flip. The audit always covers the 22-ticker default
+universe plus anything you've viewed, so that's about a week of daily runs.
+Until then `is_meaningful` is `false`, and the API
 says so rather than letting you over-read a small sample.
 
 `band_coverage` checks the band's own promise: the share of real closes that

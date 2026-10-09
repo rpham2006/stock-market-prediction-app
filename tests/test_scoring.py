@@ -57,6 +57,32 @@ def test_scoring_fills_in_the_outcome(session, client):
     assert prediction.error_pct == pytest.approx(1.0, abs=0.01)
 
 
+def test_unfinished_session_is_not_scored(session, client):
+    """A mid-session bar is the latest trade, not the close. Scoring is
+    permanent, so it must wait until the session is over."""
+    from datetime import datetime, time
+
+    bars = _seed(session, client)
+    base, target = bars[-2], bars[-1]
+    repo.save_prediction(session, _prediction("AAPL", base, target.day, target.close))
+
+    def on_target_day(hour, minute):
+        return datetime.combine(target.day, time(hour, minute), tzinfo=scoring.EXCHANGE_TZ)
+
+    assert scoring.score_predictions(session, now=on_target_day(11, 0)) == []
+    assert scoring.score_predictions(session, now=on_target_day(16, 5)) == []
+    assert len(scoring.score_predictions(session, now=on_target_day(16, 45))) == 1
+
+
+def test_session_is_final_on_later_days():
+    from datetime import date, datetime, time
+
+    friday = date(2026, 6, 26)
+    monday_morning = datetime.combine(date(2026, 6, 29), time(9, 0), tzinfo=scoring.EXCHANGE_TZ)
+    assert scoring.session_is_final(friday, now=monday_morning)
+    assert not scoring.session_is_final(date(2026, 6, 29), now=monday_morning)
+
+
 def test_error_sign_distinguishes_over_from_undershoot(session, client):
     bars = _seed(session, client)
     base, target = bars[-3], bars[-2]
@@ -247,11 +273,13 @@ def test_audit_report_aggregates(session, client):
     assert abs(z) < 10          # a sane z-score, not an artefact
 
 
-def test_audit_defaults_to_tracked_symbols(session, client):
+def test_audit_defaults_to_tracked_plus_fixed_symbols(session, client):
     service.get_dashboard(session, "AAPL", client)
     report = scoring.audit_universe(session, client)
 
-    assert [run.symbol for run in report.runs] == ["AAPL"]
+    # Tracked first, then the fixed universe. The fake client only knows
+    # AAPL, MSFT and KO, so the other fixed symbols fail and are skipped.
+    assert [run.symbol for run in report.runs] == ["AAPL", "MSFT", "KO"]
 
 
 def test_mae_ratio_matches_its_inputs(session, client):
@@ -300,3 +328,14 @@ def test_missing_columns_are_added_to_an_existing_table(tmp_path, monkeypatch):
     columns = {c["name"] for c in sa.inspect(engine).get_columns("predictions")}
     assert {"actual_close", "error_pct", "direction_correct", "scored_at"} <= columns
     engine.dispose()
+
+
+def test_default_universe_keeps_tracked_tickers_and_the_fixed_set(session, client):
+    _seed(session, client, "AAPL")
+    _seed(session, client, "MSFT")
+
+    universe = scoring.default_universe(session)
+
+    assert set(universe[:2]) == {"AAPL", "MSFT"}               # tracked first
+    assert set(scoring.DEFAULT_UNIVERSE) <= set(universe)
+    assert len(universe) == len(set(universe))                  # no duplicates
